@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIGC Генератор</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0d1117; color: #e6edf3; min-height: 100vh; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 22px; background: #161b22; border-bottom: 1px solid #30363d; flex-wrap: wrap; }
+  header h1 { font-size: 19px; font-weight: 600; }
+  header h1 span { color: #58a6ff; }
+  .keybox { display: flex; gap: 8px; align-items: center; }
+  .keybox input { background: #0d1117; border: 1px solid #30363d; color: #e6edf3; padding: 7px 10px; border-radius: 6px; width: 280px; font-size: 13px; }
+  .keybox button { background: #238636; border: 0; color: #fff; padding: 7px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .keybox button:hover { background: #2ea043; }
+  .head-actions { display: flex; gap: 8px; }
+  .ghost { background: transparent; border: 1px solid #30363d; color: #c9d1d9; padding: 7px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .ghost:hover { border-color: #58a6ff; color: #58a6ff; }
+  .overlay { position: fixed; inset: 0; background: #000000aa; display: flex; align-items: center; justify-content: center; z-index: 50; }
+  .overlay[hidden] { display: none; }
+  .modal { background: #161b22; border: 1px solid #30363d; border-radius: 12px; width: min(720px, 92vw); max-height: 86vh; overflow-y: auto; padding: 22px; }
+  .modal h2 { font-size: 18px; margin-bottom: 6px; }
+  .modal h3 { font-size: 14px; margin: 18px 0 8px; color: #58a6ff; }
+  .modal p, .modal li { font-size: 13.5px; color: #c9d1d9; line-height: 1.55; }
+  .modal ul { padding-left: 18px; }
+  .modal .close { float: right; background: none; border: 0; color: #8b949e; font-size: 20px; cursor: pointer; }
+  .modal input[type=password], .modal input[type=text] { background: #0d1117; border: 1px solid #30363d; color: #e6edf3; padding: 8px 10px; border-radius: 6px; font-size: 13px; width: 100%; }
+  .modal pre { background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 12px; overflow-x: auto; font-size: 12.5px; line-height: 1.5; color: #a5d6ff; margin: 6px 0 12px; }
+  .row { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+  .row button, .keylist button { background: #238636; border: 0; color: #fff; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .keylist { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .keyitem { background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .keyitem code { font-size: 12.5px; color: #3fb950; word-break: break-all; flex: 1; min-width: 220px; }
+  .keyitem span { font-size: 12px; color: #8b949e; }
+  .keyitem button { background: #da3633; padding: 5px 10px; font-size: 12px; }
+  #keysMsg { font-size: 12.5px; color: #8b949e; margin-top: 8px; }
+  #keysMsg.err { color: #f85149; }
+  .layout { display: flex; min-height: calc(100vh - 61px); }
+  aside { width: 300px; background: #161b22; border-right: 1px solid #30363d; padding: 12px; overflow-y: auto; flex-shrink: 0; }
+  .cat { margin-bottom: 14px; }
+  .cat h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: #8b949e; margin-bottom: 8px; padding: 0 6px; }
+  .mod { padding: 9px 10px; border-radius: 6px; cursor: pointer; margin-bottom: 4px; }
+  .mod:hover { background: #21262d; }
+  .mod.active { background: #1f6feb33; border: 1px solid #1f6feb; }
+  .mod b { display: block; font-size: 13.5px; font-weight: 600; }
+  .mod small { color: #8b949e; font-size: 11.5px; display: block; margin-top: 2px; }
+  main { flex: 1; padding: 26px 34px; max-width: 860px; }
+  #welcome { color: #8b949e; text-align: center; margin-top: 90px; font-size: 15px; }
+  #mTitle { font-size: 22px; margin-bottom: 4px; }
+  #mDesc { color: #8b949e; font-size: 13.5px; margin-bottom: 18px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .tabs button { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; padding: 7px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .tabs button.active { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+  .fg { margin-bottom: 15px; }
+  .fg label { display: block; font-size: 13px; color: #c9d1d9; margin-bottom: 6px; }
+  .fg textarea, .fg input[type=text], .fg input[type=number], .fg select {
+    width: 100%; background: #0d1117; border: 1px solid #30363d; color: #e6edf3;
+    padding: 9px 11px; border-radius: 6px; font-size: 14px; font-family: inherit;
+  }
+  .fg textarea { min-height: 90px; resize: vertical; }
+  .fg .hint { font-size: 11.5px; color: #8b949e; margin-top: 4px; }
+  .drop { border: 1px dashed #30363d; border-radius: 8px; padding: 18px; text-align: center; cursor: pointer; color: #8b949e; font-size: 13px; position: relative; }
+  .drop:hover { border-color: #58a6ff; color: #c9d1d9; }
+  .drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .drop.has { border-style: solid; border-color: #238636; color: #3fb950; }
+  .chk { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  .chk input { width: 16px; height: 16px; }
+  h4.sec { margin: 22px 0 12px; font-size: 15px; }
+  #genBtn { background: #238636; border: 0; color: #fff; font-size: 15px; padding: 11px 26px; border-radius: 7px; cursor: pointer; margin-top: 8px; }
+  #genBtn:hover { background: #2ea043; }
+  #genBtn:disabled { opacity: .5; cursor: wait; }
+  #status { margin-top: 16px; font-size: 14px; color: #8b949e; }
+  #status.err { color: #f85149; }
+  #status.ok { color: #3fb950; }
+  .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid #30363d; border-top-color: #58a6ff; border-radius: 50%; animation: s .8s linear infinite; vertical-align: -2px; margin-right: 7px; }
+  @keyframes s { to { transform: rotate(360deg); } }
+  #result { margin-top: 22px; background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 16px; }
+  #result h4 { margin-bottom: 12px; font-size: 15px; }
+  #result video, #result img, #result audio { max-width: 100%; border-radius: 8px; display: block; margin-bottom: 12px; }
+  #result a.dl { display: inline-block; background: #1f6feb; color: #fff; text-decoration: none; padding: 8px 18px; border-radius: 6px; font-size: 14px; }
+  #result code { background: #0d1117; padding: 8px 12px; border-radius: 6px; display: inline-block; word-break: break-all; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span>◆</span> AIGC Генератор</h1>
+  <div class="head-actions">
+    <button class="ghost" id="btnKeys">API ключи</button>
+    <button class="ghost" id="btnDocs">Документация</button>
+  </div>
+</header>
+
+<div class="layout">
+  <aside id="sidebar"></aside>
+  <main>
+    <div id="welcome">Выбери модель слева</div>
+    <section id="panel" hidden>
+      <h2 id="mTitle"></h2>
+      <p id="mDesc"></p>
+      <div class="tabs" id="tabs"></div>
+      <form id="genForm">
+        <div id="inputFields"></div>
+        <div id="paramsFields"></div>
+        <button type="submit" id="genBtn">Сгенерировать</button>
+      </form>
+      <div id="status"></div>
+      <div id="result" hidden></div>
+    </section>
+  </main>
+</div>
+
+<div class="overlay" id="keysModal" hidden>
+  <div class="modal">
+    <button class="close" data-close="keysModal">×</button>
+    <h2>API ключи</h2>
+    <p>Ключи — для внешних приложений. Сам сайт в ключе не нуждается.</p>
+    <h3>Секрет администратора</h3>
+    <input type="password" id="adminSecret" placeholder="ADMIN_SECRET (сейчас: test123)">
+    <div class="row">
+      <button id="btnCreateKey">Создать API ключ</button>
+      <button class="ghost" id="btnListKeys">Обновить список</button>
+    </div>
+    <div id="keysMsg"></div>
+    <div class="keylist" id="keyList"></div>
+  </div>
+</div>
+
+<div class="overlay" id="docsModal" hidden>
+  <div class="modal">
+    <button class="close" data-close="docsModal">×</button>
+    <h2>Документация API</h2>
+    <p>Базовый адрес: <code>http://localhost:3000</code>. Все ответы — JSON, кодировка UTF-8.</p>
+
+    <h3>Авторизация</h3>
+    <ul>
+      <li>Сайт работает без ключа.</li>
+      <li>Внешние приложения шлют ключ заголовком <code>X-API-Key: sk-...</code> — по нему считается использование.</li>
+      <li>Ключ создаётся в «API ключи» (нужен секрет администратора, задаётся переменной окружения <code>ADMIN_SECRET</code>).</li>
+    </ul>
+
+    <h3>GET /api/models</h3>
+    <p>Список моделей с формами: inputs (image / audio / video / text, «?» — необязательно), params (select / number / text / textarea / checkbox), tabs — вкладки.</p>
+    <pre>curl http://localhost:3000/api/models
+curl -H "X-API-Key: sk-..." http://localhost:3000/api/models</pre>
+
+    <h3>POST /api/generate</h3>
+    <p>multipart/form-data:</p>
+    <ul>
+      <li><code>model</code> — id модели (из /api/models), напр. <code>seedance</code></li>
+      <li><code>tab_id</code> — id вкладки, если у модели есть вкладки (напр. <code>talk</code> / <code>wait</code>)</li>
+      <li><code>params</code> — JSON со всеми параметрами формы: {"duration":5,"ratio":"16:9","seed":1234}</li>
+      <li><code>text</code> — промпт, если модель его просит</li>
+      <li><code>image</code> / <code>audio</code> / <code>video</code> — файлы; фото-референс обязателен там, где это указано в модели, без него вернётся 400</li>
+    </ul>
+    <p>Ответ: {"task_id":"uuid"}. Ошибка: {"error":"..."}.</p>
+    <pre>curl -X POST http://localhost:3000/api/generate ^
+  -H "X-API-Key: sk-..." ^
+  -F "model=seedance" ^
+  -F "params={"duration":5,"ratio":"16:9","resolution":"720p","seed":1234}" ^
+  -F "text=кот гуляет по городу" ^
+  -F "image=@ref.jpg"</pre>
+
+    <h3>GET /api/task/{id}</h3>
+    <p>Статус задачи: <code>queued</code> → <code>running</code> → <code>completed</code> / <code>failed</code>. Опрос раз в 3 секунды, генерация занимает до 25 минут.</p>
+    <pre>curl -H "X-API-Key: sk-..." http://localhost:3000/api/task/uuid
+
+{"status":"completed","result":{"url":"https://.../out.mp4","type":"video"}}
+{"status":"failed","error":"описание ошибки"}</pre>
+    <p><code>result.type</code>: video / image / audio / voice_id (тогда в <code>voiceId</code> — id голоса).</p>
+
+    <h3>Управление ключами (только админ)</h3>
+    <pre>POST   /api/keys            x-admin-secret + {"name":"имя"}
+GET    /api/keys            x-admin-secret
+DELETE /api/keys/{key}      x-admin-secret</pre>
+  </div>
+</div>
+
+<script>
+const CATS = { video: 'Видео', audio: 'Аудио', image: 'Изображения', other: 'Прочее' };
+let modules = [], currentModule = null, currentTabId = null, polling = null;
+
+const $ = id => document.getElementById(id);
+
+async function api(url, opts = {}) {
+  const r = await fetch(url, opts);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || 'ошибка ' + r.status);
+  return data;
+}
+
+async function loadModels() {
+  try {
+    modules = await api('/api/models');
+    renderSidebar();
+  } catch (e) {
+    $('sidebar').innerHTML = `<p style="color:#f85149;font-size:13px">${e.message}</p>`;
+  }
+}
+
+// ---- модалки ----
+document.querySelectorAll('[data-close]').forEach(b =>
+  b.onclick = () => $(b.dataset.close).hidden = true
+);
+document.querySelectorAll('.overlay').forEach(o =>
+  o.onclick = e => { if (e.target === o) o.hidden = true; }
+);
+$('btnDocs').onclick = () => $('docsModal').hidden = false;
+
+// ---- API ключи ----
+$('adminSecret').value = localStorage.getItem('aigc_admin') || '';
+const adminHdr = () => ({ 'x-admin-secret': $('adminSecret').value.trim(), 'Content-Type': 'application/json' });
+const keysMsg = (m, err) => { $('keysMsg').textContent = m; $('keysMsg').className = err ? 'err' : ''; };
+
+async function renderKeys() {
+  const list = await api('/api/keys', { headers: adminHdr() });
+  $('keyList').innerHTML = list.length ? list.map(k => `
+    <div class="keyitem">
+      <code>${k.key}</code>
+      <span>${k.name} · использований: ${k.uses || 0}${k.lastUsed ? ' · ' + k.lastUsed.slice(0, 16).replace('T', ' ') : ''}</span>
+      <button data-key="${k.key}">Отозвать</button>
+      <button class="ghost" data-copy="${k.key}">Копировать</button>
+    </div>`).join('') : '<p style="color:#8b949e;font-size:13px">ключей пока нет</p>';
+  document.querySelectorAll('#keyList [data-key]').forEach(b =>
+    b.onclick = async () => {
+      try {
+        await api('/api/keys/' + b.dataset.key, { method: 'DELETE', headers: adminHdr() });
+        keysMsg('ключ отозван');
+        renderKeys();
+      } catch (e) { keysMsg(e.message, true); }
+    });
+  document.querySelectorAll('#keyList [data-copy]').forEach(b =>
+    b.onclick = () => { navigator.clipboard.writeText(b.dataset.copy); keysMsg('скопировано'); });
+}
+
+$('btnKeys').onclick = async () => {
+  $('keysModal').hidden = false;
+  keysMsg('');
+  try { await renderKeys(); } catch (e) { keysMsg(e.message, true); }
+};
+$('btnCreateKey').onclick = async () => {
+  try {
+    localStorage.setItem('aigc_admin', $('adminSecret').value.trim());
+    const r = await api('/api/keys', { method: 'POST', headers: adminHdr(), body: JSON.stringify({ name: 'app' }) });
+    keysMsg('создан: ' + r.key);
+    renderKeys();
+  } catch (e) { keysMsg(e.message, true); }
+};
+$('btnListKeys').onclick = async () => {
+  try { await renderKeys(); keysMsg('список обновлён'); }
+  catch (e) { keysMsg(e.message, true); }
+};
+
+function renderSidebar() {
+  const byCat = {};
+  modules.forEach(m => (byCat[m.category || 'other'] ||= []).push(m));
+  $('sidebar').innerHTML = Object.entries(byCat).map(([cat, list]) => `
+    <div class="cat">
+      <h3>${CATS[cat] || cat}</h3>
+      ${list.map(m => `
+        <div class="mod" data-id="${m.id}">
+          <b>${m.name}</b><small>${m.description || ''}</small>
+        </div>`).join('')}
+    </div>`).join('');
+  document.querySelectorAll('.mod').forEach(el => el.onclick = () => selectModule(el.dataset.id));
+}
+
+function selectModule(id) {
+  currentModule = modules.find(m => m.id === id);
+  if (!currentModule) return;
+  document.querySelectorAll('.mod').forEach(el => el.classList.toggle('active', el.dataset.id === id));
+  $('welcome').hidden = true;
+  $('panel').hidden = false;
+  $('result').hidden = true;
+  $('status').textContent = '';
+  $('status').className = '';
+  $('mTitle').textContent = currentModule.name;
+  $('mDesc').textContent = currentModule.description || '';
+  currentTabId = currentModule.tabs && currentModule.tabs.length ? currentModule.tabs[0].id : null;
+  renderAll();
+}
+
+const cfg = () =>
+  (currentTabId && currentModule.tabs ? currentModule.tabs.find(t => t.id === currentTabId) : null) || currentModule;
+
+function renderAll() {
+  renderTabs();
+  renderInputs();
+  renderParams();
+}
+
+function renderTabs() {
+  const tabs = currentModule.tabs || [];
+  $('tabs').innerHTML = tabs.map(t =>
+    `<button type="button" class="${t.id === currentTabId ? 'active' : ''}" data-id="${t.id}">${t.name}</button>`
+  ).join('');
+  document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
+    currentTabId = b.dataset.id;
+    $('result').hidden = true;
+    renderAll();
+  });
+}
+
+function renderInputs() {
+  let html = '';
+  (cfg().inputs || []).forEach(raw => {
+    const optional = raw.endsWith('?');
+    const t = raw.replace('?', '');
+    if (t === 'text') {
+      html += `<div class="fg"><label>Промпт *</label>
+        <textarea name="text" placeholder="Введите промпт..." required></textarea></div>`;
+    } else if (['image', 'audio', 'video'].includes(t)) {
+      const label = { image: 'Фото-референс', audio: 'Аудио', video: 'Видео' }[t];
+      const accept = { image: 'image/*', audio: 'audio/*', video: 'video/*' }[t];
+      const fmt = { image: 'PNG, JPG, JPEG, GIF, BMP, WEBP', audio: 'MP3, WAV, OGG, M4A, AAC', video: 'MP4, AVI, MOV' }[t];
+      html += `<div class="fg"><label>${label} ${optional ? '(необязательно)' : '*'}</label>
+        <div class="drop" id="drop-${t}">
+          Перетащи или нажми · ${fmt}
+          <input type="file" name="${t}" accept="${accept}">
+        </div></div>`;
+    }
+  });
+  $('inputFields').innerHTML = html;
+  ['image', 'audio', 'video'].forEach(t => {
+    const el = document.querySelector(`#inputFields input[name="${t}"]`);
+    if (!el) return;
+    const d = document.getElementById('drop-' + t);
+    const baseText = d.textContent.trim();
+    el.onchange = () => {
+      if (!el.files[0]) return;
+      d.classList.add('has');
+      d.firstChild.textContent = `✓ ${el.files[0].name} `;
+    };
+  });
+}
+
+function renderParams() {
+  const params = cfg().params || {};
+  const keys = Object.keys(params);
+  if (!keys.length && !currentTabId) { $('paramsFields').innerHTML = ''; return; }
+  let html = keys.length ? '<h4 class="sec">Параметры</h4>' : '';
+  if (currentTabId) html += `<input type="hidden" name="tab_id" value="${currentTabId}">`;
+  keys.forEach(k => {
+    const p = params[k], id = 'p_' + k;
+    if (p.type === 'select') {
+      html += `<div class="fg"><label>${p.label}</label><select id="${id}" name="${k}">
+        ${p.options.map(o => `<option ${o === p.default ? 'selected' : ''}>${o}</option>`).join('')}
+      </select></div>`;
+    } else if (p.type === 'number') {
+      html += `<div class="fg"><label>${p.label}</label>
+        <input type="number" id="${id}" name="${k}" value="${p.default ?? ''}"
+        min="${p.min ?? 0}" max="${p.max ?? 100}" step="0.1"></div>`;
+    } else if (p.type === 'textarea') {
+      html += `<div class="fg"><label>${p.label}</label>
+        <textarea id="${id}" name="${k}" maxlength="${p.max_length || 500}">${p.default || ''}</textarea></div>`;
+    } else if (p.type === 'checkbox') {
+      html += `<div class="fg"><label class="chk">
+        <input type="checkbox" id="${id}" name="${k}" ${p.default ? 'checked' : ''}> ${p.label}</label></div>`;
+    } else {
+      html += `<div class="fg"><label>${p.label}</label>
+        <input type="text" id="${id}" name="${k}" value="${p.default || ''}"></div>`;
+    }
+  });
+  $('paramsFields').innerHTML = html;
+}
+
+$('genForm').onsubmit = async e => {
+  e.preventDefault();
+  if (!currentModule) return;
+  clearInterval(polling);
+  const fd = new FormData(e.target);
+  const params = {};
+  e.target.querySelectorAll('[name]').forEach(f => {
+    const n = f.name;
+    if (['image', 'audio', 'video', 'text', 'tab_id'].includes(n)) return;
+    params[n] = f.type === 'checkbox' ? f.checked : f.type === 'number' ? parseFloat(f.value) : f.value;
+  });
+  fd.append('params', JSON.stringify(params));
+  fd.append('model', currentModule.id);
+  if (currentTabId && !fd.get('tab_id')) fd.append('tab_id', currentTabId);
+
+  const btn = $('genBtn');
+  btn.disabled = true;
+  setStatus('<span class="spin"></span>отправка...', '');
+
+  try {
+    const r = await fetch('/api/generate', { method: 'POST', body: fd });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'ошибка отправки');
+    setStatus('<span class="spin"></span>задача в очереди, генерация идёт...', '');
+    poll(data.task_id);
+  } catch (err) {
+    setStatus(err.message, 'err');
+    btn.disabled = false;
+  }
+};
+
+function poll(id) {
+  polling = setInterval(async () => {
+    try {
+      const t = await api('/api/task/' + id);
+      if (t.status === 'queued') setStatus('<span class="spin"></span>в очереди...', '');
+      else if (t.status === 'running') setStatus('<span class="spin"></span>генерация, подожди...', '');
+      else if (t.status === 'failed') {
+        clearInterval(polling);
+        $('genBtn').disabled = false;
+        setStatus('ошибка: ' + t.error, 'err');
+      } else if (t.status === 'completed') {
+        clearInterval(polling);
+        $('genBtn').disabled = false;
+        setStatus('готово!', 'ok');
+        showResult(t.result);
+      }
+    } catch (e) {
+      clearInterval(polling);
+      $('genBtn').disabled = false;
+      setStatus(e.message, 'err');
+    }
+  }, 3000);
+}
+
+function showResult(r) {
+  const box = $('result');
+  let inner = '<h4>Результат</h4>';
+  if (r.type === 'video') inner += `<video controls autoplay src="${r.url}"></video>`;
+  else if (r.type === 'image') inner += `<img src="${r.url}" alt="результат">`;
+  else if (r.type === 'audio') inner += `<audio controls src="${r.url}"></audio>`;
+  else if (r.type === 'voice_id') inner += `<p>Голос клонирован, ID:</p><code>${r.voiceId}</code>`;
+  if (r.url) inner += `<a class="dl" href="${r.url}" download>Скачать</a>`;
+  box.innerHTML = inner;
+  box.hidden = false;
+  box.scrollIntoView({ behavior: 'smooth' });
+}
+
+function setStatus(html, cls) {
+  $('status').innerHTML = html;
+  $('status').className = cls;
+}
+
+loadModels();
+</script>
+</body>
+</html>
