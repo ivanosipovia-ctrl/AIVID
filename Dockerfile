@@ -6,7 +6,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-COPY server.js automation.js ./
+COPY server.js automation.js keys_store.js ./
 COPY public ./public
 
 ENV NODE_ENV=production
