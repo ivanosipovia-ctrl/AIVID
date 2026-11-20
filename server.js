@@ -8,13 +8,9 @@ const { runGeneration } = require('./automation');
 const PORT = process.env.PORT || 3000;
 const UPSTREAM = 'https://aigc.medicalai.tech';
 const ADMIN_SECRET = process.env.ADMIN_SECRET || 'change-me-admin';
-const KEYS_FILE = path.join(__dirname, 'keys.json');
+const store = require('./keys_store');
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-
-let keys = {};
-try { keys = JSON.parse(fs.readFileSync(KEYS_FILE, 'utf8')); } catch {}
-const saveKeys = () => fs.writeFileSync(KEYS_FILE, JSON.stringify(keys, null, 2));
 
 const app = express();
 app.use(express.json());
@@ -41,15 +37,15 @@ const configOf = (m, tabId) =>
   (tabId && m.tabs ? m.tabs.find(t => t.id === tabId) : null) || m;
 
 // ---- ключи ----
-function auth(req, res, next) {
-  const key = req.headers['x-api-key'];
-  if (key) {
-    if (!keys[key]) return res.status(401).json({ error: 'неверный API ключ' });
-    keys[key].uses = (keys[key].uses || 0) + 1;
-    keys[key].lastUsed = new Date().toISOString();
-    saveKeys();
+async function auth(req, res, next) {
+  try {
+    const key = req.headers['x-api-key'];
+    if (key && !(await store.touch(key)))
+      return res.status(401).json({ error: 'неверный API ключ' });
+    next();
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
-  next();
 }
 function admin(req, res, next) {
   if (req.headers['x-admin-secret'] !== ADMIN_SECRET)
@@ -57,20 +53,26 @@ function admin(req, res, next) {
   next();
 }
 
-app.post('/api/keys', admin, (req, res) => {
-  const name = (req.body && req.body.name) || 'key';
-  const key = 'sk-' + crypto.randomBytes(24).toString('hex');
-  keys[key] = { name, createdAt: new Date().toISOString(), uses: 0 };
-  saveKeys();
-  res.json({ key, name });
+app.post('/api/keys', admin, async (req, res) => {
+  try {
+    const name = (req.body && req.body.name) || 'key';
+    const key = await store.create(name);
+    res.json({ key, name });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
-app.get('/api/keys', admin, (req, res) =>
-  res.json(Object.entries(keys).map(([k, v]) => ({ key: k, ...v })))
-);
-app.delete('/api/keys/:key', admin, (req, res) => {
-  delete keys[req.params.key];
-  saveKeys();
-  res.json({ ok: true });
+app.get('/api/keys', admin, async (req, res) => {
+  try { res.json(await store.list()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.delete('/api/keys/:key', admin, async (req, res) => {
+  try {
+    await store.remove(req.params.key);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ---- модели ----
@@ -170,4 +172,13 @@ app.get('/api/task/:id', auth, (req, res) => {
   res.json(t);
 });
 
-app.listen(PORT, () => console.log(`http://localhost:${PORT}`));
+store.init(ADMIN_SECRET)
+  .then(() => {
+    app.listen(PORT, () =>
+      console.log(`http://localhost:${PORT} (${process.env.DATABASE_URL ? 'postgres' : 'файл keys.json'})`)
+    );
+  })
+  .catch(e => {
+    console.error('не удалось подключить хранилище ключей:', e.message);
+    process.exit(1);
+  });

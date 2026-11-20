@@ -212,22 +212,36 @@ $('adminSecret').value = localStorage.getItem('aigc_admin') || '';
 const adminHdr = () => ({ 'x-admin-secret': $('adminSecret').value.trim(), 'Content-Type': 'application/json' });
 const keysMsg = (m, err) => { $('keysMsg').textContent = m; $('keysMsg').className = err ? 'err' : ''; };
 
+// список ключей дублируется в браузере: даже если сервер стёр журнал,
+// ключи у тебя под рукой и они всё равно валидны
+const localKeys = () => { try { return JSON.parse(localStorage.getItem('aigc_keys') || '[]'); } catch { return []; } };
+const saveLocalKeys = list => localStorage.setItem('aigc_keys', JSON.stringify(list));
+
 async function renderKeys() {
-  const list = await api('/api/keys', { headers: adminHdr() });
+  let server = [];
+  try { server = await api('/api/keys', { headers: adminHdr() }); }
+  catch (e) { keysMsg(e.message, true); }
+  const merged = new Map();
+  for (const k of [...server, ...localKeys()]) {
+    const prev = merged.get(k.key) || {};
+    merged.set(k.key, { ...prev, ...k, uses: Math.max(prev.uses || 0, k.uses || 0) });
+  }
+  const list = [...merged.values()];
   $('keyList').innerHTML = list.length ? list.map(k => `
     <div class="keyitem">
       <code>${k.key}</code>
-      <span>${k.name} · использований: ${k.uses || 0}${k.lastUsed ? ' · ' + k.lastUsed.slice(0, 16).replace('T', ' ') : ''}</span>
+      <span>${k.name} · использований: ${k.uses || 0}${k.lastUsed ? ' · ' + String(k.lastUsed).slice(0, 16).replace('T', ' ') : ''}</span>
       <button data-key="${k.key}">Отозвать</button>
       <button class="ghost" data-copy="${k.key}">Копировать</button>
     </div>`).join('') : '<p style="color:#8b949e;font-size:13px">ключей пока нет</p>';
   document.querySelectorAll('#keyList [data-key]').forEach(b =>
     b.onclick = async () => {
+      saveLocalKeys(localKeys().filter(k => k.key !== b.dataset.key));
       try {
         await api('/api/keys/' + b.dataset.key, { method: 'DELETE', headers: adminHdr() });
         keysMsg('ключ отозван');
-        renderKeys();
-      } catch (e) { keysMsg(e.message, true); }
+      } catch (e) { keysMsg('убран из списка'); }
+      renderKeys();
     });
   document.querySelectorAll('#keyList [data-copy]').forEach(b =>
     b.onclick = () => { navigator.clipboard.writeText(b.dataset.copy); keysMsg('скопировано'); });
@@ -242,6 +256,9 @@ $('btnCreateKey').onclick = async () => {
   try {
     localStorage.setItem('aigc_admin', $('adminSecret').value.trim());
     const r = await api('/api/keys', { method: 'POST', headers: adminHdr(), body: JSON.stringify({ name: 'app' }) });
+    const locals = localKeys().filter(k => k.key !== r.key);
+    locals.push({ key: r.key, name: r.name, uses: 0 });
+    saveLocalKeys(locals);
     keysMsg('создан: ' + r.key);
     renderKeys();
   } catch (e) { keysMsg(e.message, true); }
