@@ -113,13 +113,12 @@
 <div class="overlay" id="keysModal" hidden>
   <div class="modal">
     <button class="close" data-close="keysModal">×</button>
-    <h2>API ключи</h2>
-    <p>Ключи — для внешних приложений. Сам сайт в ключе не нуждается.</p>
+    <h2>API ключ</h2>
+    <p>Один постоянный ключ для внешних приложений. Не имеет срока, переживает любые рестарты. Сам сайт в ключе не нуждается.</p>
     <h3>Секрет администратора</h3>
     <input type="password" id="adminSecret" placeholder="ADMIN_SECRET (сейчас: test123)">
     <div class="row">
-      <button id="btnCreateKey">Создать API ключ</button>
-      <button class="ghost" id="btnListKeys">Обновить список</button>
+      <button id="btnCreateKey">Показать ключ</button>
     </div>
     <div id="keysMsg"></div>
     <div class="keylist" id="keyList"></div>
@@ -135,8 +134,8 @@
     <h3>Авторизация</h3>
     <ul>
       <li>Сайт работает без ключа.</li>
-      <li>Внешние приложения шлют ключ заголовком <code>X-API-Key: sk-...</code> — по нему считается использование.</li>
-      <li>Ключ создаётся в «API ключи» (нужен секрет администратора, задаётся переменной окружения <code>ADMIN_SECRET</code>).</li>
+      <li>Внешние приложения шлют <b>один постоянный ключ</b> заголовком <code>X-API-Key: sk-main.…</code> — он есть всегда, переживает рестарты, показывается в меню «API ключи» (нужен <code>ADMIN_SECRET</code>).</li>
+      <li><code>POST /api/keys</code> (заголовок <code>x-admin-secret</code>) вернёт этот же ключ — можно получить и из скрипта.</li>
     </ul>
 
     <h3>GET /api/models</h3>
@@ -169,10 +168,9 @@ curl -H "X-API-Key: sk-..." http://localhost:3000/api/models</pre>
 {"status":"failed","error":"описание ошибки"}</pre>
     <p><code>result.type</code>: video / image / audio / voice_id (тогда в <code>voiceId</code> — id голоса).</p>
 
-    <h3>Управление ключами (только админ)</h3>
-    <pre>POST   /api/keys            x-admin-secret + {"name":"имя"}
-GET    /api/keys            x-admin-secret
-DELETE /api/keys/{key}      x-admin-secret</pre>
+    <h3>Управление ключом (только админ)</h3>
+    <pre>POST   /api/keys            x-admin-secret → {"key":"sk-main.…"}
+GET    /api/keys            x-admin-secret → список (всегда с мастер-ключом)</pre>
   </div>
 </div>
 
@@ -212,37 +210,18 @@ $('adminSecret').value = localStorage.getItem('aigc_admin') || '';
 const adminHdr = () => ({ 'x-admin-secret': $('adminSecret').value.trim(), 'Content-Type': 'application/json' });
 const keysMsg = (m, err) => { $('keysMsg').textContent = m; $('keysMsg').className = err ? 'err' : ''; };
 
-// список ключей дублируется в браузере: даже если сервер стёр журнал,
-// ключи у тебя под рукой и они всё равно валидны
-const localKeys = () => { try { return JSON.parse(localStorage.getItem('aigc_keys') || '[]'); } catch { return []; } };
-const saveLocalKeys = list => localStorage.setItem('aigc_keys', JSON.stringify(list));
-
+// один постоянный ключ — список приходит только с сервера
 async function renderKeys() {
-  let server = [];
-  try { server = await api('/api/keys', { headers: adminHdr() }); }
+  let list = [];
+  try { list = await api('/api/keys', { headers: adminHdr() }); }
   catch (e) { keysMsg(e.message, true); }
-  const merged = new Map();
-  for (const k of [...server, ...localKeys()]) {
-    const prev = merged.get(k.key) || {};
-    merged.set(k.key, { ...prev, ...k, uses: Math.max(prev.uses || 0, k.uses || 0) });
-  }
-  const list = [...merged.values()];
-  $('keyList').innerHTML = list.length ? list.map(k => `
+  localStorage.setItem('aigc_keys', JSON.stringify(list));
+  $('keyList').innerHTML = list.map(k => `
     <div class="keyitem">
       <code>${k.key}</code>
       <span>${k.name} · использований: ${k.uses || 0}${k.lastUsed ? ' · ' + String(k.lastUsed).slice(0, 16).replace('T', ' ') : ''}</span>
-      <button data-key="${k.key}">Отозвать</button>
       <button class="ghost" data-copy="${k.key}">Копировать</button>
-    </div>`).join('') : '<p style="color:#8b949e;font-size:13px">ключей пока нет</p>';
-  document.querySelectorAll('#keyList [data-key]').forEach(b =>
-    b.onclick = async () => {
-      saveLocalKeys(localKeys().filter(k => k.key !== b.dataset.key));
-      try {
-        await api('/api/keys/' + b.dataset.key, { method: 'DELETE', headers: adminHdr() });
-        keysMsg('ключ отозван');
-      } catch (e) { keysMsg('убран из списка'); }
-      renderKeys();
-    });
+    </div>`).join('') || '<p style="color:#8b949e;font-size:13px">нет секрета администратора</p>';
   document.querySelectorAll('#keyList [data-copy]').forEach(b =>
     b.onclick = () => { navigator.clipboard.writeText(b.dataset.copy); keysMsg('скопировано'); });
 }
@@ -255,17 +234,9 @@ $('btnKeys').onclick = async () => {
 $('btnCreateKey').onclick = async () => {
   try {
     localStorage.setItem('aigc_admin', $('adminSecret').value.trim());
-    const r = await api('/api/keys', { method: 'POST', headers: adminHdr(), body: JSON.stringify({ name: 'app' }) });
-    const locals = localKeys().filter(k => k.key !== r.key);
-    locals.push({ key: r.key, name: r.name, uses: 0 });
-    saveLocalKeys(locals);
-    keysMsg('создан: ' + r.key);
-    renderKeys();
+    await renderKeys();
+    keysMsg('ключ показан — копируй и используй в приложении заголовком X-API-Key');
   } catch (e) { keysMsg(e.message, true); }
-};
-$('btnListKeys').onclick = async () => {
-  try { await renderKeys(); keysMsg('список обновлён'); }
-  catch (e) { keysMsg(e.message, true); }
 };
 
 function renderSidebar() {

@@ -25,6 +25,12 @@ async function init(adminSecret) {
   if (!fs.existsSync(KEYS_FILE)) writeFile({});
 }
 
+// Единственный постоянный ключ. Тоже самоподписывающийся, но с фиксированным
+// именем: существует всегда, переживает стирание диска, рестарты и редеплои.
+async function master() {
+  return `sk-main.${sign('main')}`;
+}
+
 async function create(name) {
   name = String(name || 'key').replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 32) || 'key';
   const key = `sk-${name}.${sign(name)}`;
@@ -39,7 +45,16 @@ async function create(name) {
 }
 
 async function list() {
-  return Object.entries(readFile()).map(([k, v]) => ({ key: k, ...v }));
+  const masterKey = await master();
+  const out = [{
+    key: masterKey,
+    name: 'main (постоянный)',
+    uses: (readFile()[masterKey] || {}).uses || 0,
+    lastUsed: (readFile()[masterKey] || {}).lastUsed
+  }];
+  for (const [k, v] of Object.entries(readFile()))
+    if (k !== masterKey) out.push({ key: k, ...v });
+  return out;
 }
 
 async function remove(key) {
@@ -79,4 +94,4 @@ async function touch(key) {
   return false;
 }
 
-module.exports = { init, create, list, remove, touch };
+module.exports = { init, create, list, remove, touch, master };

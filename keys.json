@@ -1,13 +1,8 @@
 {
   "sk-main.af4fa6386e2f031f5611f0eb329882c0": {
     "name": "main",
-    "createdAt": "2026-11-20T14:37:12.974Z",
-    "uses": 1,
-    "lastUsed": "2026-11-20T14:37:12.975Z"
-  },
-  "sk-app.3737eef5927863a44a377be6f07d3588": {
-    "name": "app",
-    "createdAt": "2026-11-20T14:37:44.262Z",
-    "uses": 0
+    "createdAt": "2026-11-20T17:51:35.563Z",
+    "uses": 3,
+    "lastUsed": "2026-11-20T17:58:35.463Z"
   }
 }

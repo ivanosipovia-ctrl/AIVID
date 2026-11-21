@@ -55,9 +55,7 @@ function admin(req, res, next) {
 
 app.post('/api/keys', admin, async (req, res) => {
   try {
-    const name = (req.body && req.body.name) || 'key';
-    const key = await store.create(name);
-    res.json({ key, name });
+    res.json({ key: await store.master(), name: 'main (постоянный)' });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
