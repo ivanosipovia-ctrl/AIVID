@@ -1,13 +1,13 @@
 {
-  "name": "aigc-generator",
+  "name": "vidgen",
   "version": "1.0.0",
+  "private": true,
+  "description": "VidGen — Omni Flash + Seedance 2 Pro video generation site",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
-  "dependencies": {
-    "express": "^4.19.2",
-    "multer": "^2.0.0",
-    "playwright": "1.65.1"
+  "engines": {
+    "node": ">=18"
   }
 }

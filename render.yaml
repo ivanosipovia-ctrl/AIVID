@@ -1,8 +1,15 @@
 services:
   - type: web
-    name: aigc-generator
-    runtime: docker
-    dockerfilePath: ./Dockerfile
+    name: vidgen
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/config
     envVars:
-      - key: ADMIN_SECRET
-        generateValue: true
+      - key: TARGET_URL
+        value: http://160.30.161.35
+      # web-ключ сайта — фиксируем, чтобы после каждого редеплоя
+      # (диск эфемерный, data/ не сохраняется) он не менялся
+      - key: WEB_KEY
+        value: vg_34bb5f09ccfd3ed3c3aee4a4
